@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://hamzakk0.github.io/sitemap.xml
+Sitemap: https://hamzakk0.github.io/pano/sitemap.xml
