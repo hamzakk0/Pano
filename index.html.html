@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1F332C">
+<meta name="description" content="Pano — görsel sıkıştırma, şifre oluşturma, birim çevirme, kelime sayma, renk araçları ve JSON biçimlendirme. Kayıt gerekmez, tamamen tarayıcında çalışır.">
+<title>Pano — Günlük Araç Kutusu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --board:#1F332C;
+    --board-2:#2A4038;
+    --paper:#F4F1E7;
+    --dim:rgba(244,241,231,0.6);
+    --tan:#D9B27C;
+    --orange:#FF6A2E;
+    --line:rgba(244,241,231,0.14);
+    --ok:#7FD9A8;
+    --err:#FF6B6B;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--board); color:var(--paper);
+    font-family:'Inter', sans-serif; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{ font-family:'Barlow Condensed', sans-serif; }
+  a{ color:inherit; }
+  .wrap{ max-width:1080px; margin:0 auto; padding:0 28px; }
+  .icon{ width:24px; height:24px; flex-shrink:0; }
+  svg{ display:block; }
+
+  /* ---------- NAV ---------- */
+  nav{ position:sticky; top:0; z-index:50; background:rgba(31,51,44,0.92); backdrop-filter:blur(8px); border-bottom:1px solid var(--line); }
+  nav .wrap{ height:62px; display:flex; align-items:center; justify-content:space-between; }
+  .brand{ font-family:'Barlow Condensed'; font-weight:700; font-size:22px; text-transform:uppercase; letter-spacing:0.03em; display:flex; align-items:center; gap:9px; }
+  .brand .peg{ width:9px; height:9px; border-radius:50%; background:var(--orange); }
+  .nav-tag{ font-family:'Space Mono'; font-size:11.5px; color:var(--dim); letter-spacing:0.03em; }
+
+  /* ---------- HERO ---------- */
+  header.hero{ padding:64px 0 56px; border-bottom:1px solid var(--line); }
+  .eyebrow{ font-family:'Space Mono'; font-size:12px; color:var(--tan); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:16px; display:flex; align-items:center; gap:10px; }
+  .eyebrow::before{ content:''; width:20px; height:1px; background:var(--tan); }
+  h1.title{ font-size:clamp(36px,5.5vw,56px); font-weight:700; line-height:1.02; text-transform:uppercase; margin-bottom:16px; }
+  h1.title span{ color:var(--orange); }
+  .sub{ color:var(--dim); font-size:16px; max-width:560px; margin-bottom:36px; }
+
+  .board-label{ font-family:'Space Mono'; font-size:11.5px; letter-spacing:0.12em; color:var(--dim); text-transform:uppercase; margin-bottom:14px; }
+
+  .pegboard{
+    background-image: radial-gradient(circle, rgba(244,241,231,0.10) 1.4px, transparent 1.4px);
+    background-size:26px 26px;
+    border:1px solid var(--line); border-radius:10px; padding:26px;
+    display:grid; grid-template-columns:repeat(3,1fr); gap:16px;
+  }
+  .peg-slot{
+    position:relative; background:var(--board-2); border:1px solid var(--line); border-radius:8px;
+    padding:24px 16px 18px; display:flex; flex-direction:column; align-items:flex-start; gap:10px;
+    cursor:pointer; text-align:left; color:var(--paper); font-family:'Inter';
+    transition:border-color .15s ease, transform .15s ease, background .15s ease;
+  }
+  .peg-slot::before, .peg-slot::after{
+    content:''; position:absolute; top:10px; width:7px; height:7px; border-radius:50%;
+    background:var(--board); box-shadow:inset 0 1px 2px rgba(0,0,0,0.45);
+  }
+  .peg-slot::before{ left:14px; }
+  .peg-slot::after{ right:14px; }
+  .peg-slot:hover{ transform:translateY(-2px); border-color:var(--tan); }
+  .peg-slot.active{ border-color:var(--orange); background:rgba(255,106,46,0.09); }
+  .peg-slot:focus-visible{ outline:2px solid var(--orange); outline-offset:2px; }
+  .peg-slot .icon{ color:var(--tan); width:28px; height:28px; }
+  .peg-slot.active .icon{ color:var(--orange); }
+  .peg-slot h3{ font-size:18px; font-weight:600; text-transform:uppercase; letter-spacing:0.02em; }
+  .peg-slot p{ font-size:12.5px; color:var(--dim); }
+
+  /* ---------- TOOL STAGE ---------- */
+  #toolstage{ padding:52px 0; }
+  .stage-card{ background:var(--board-2); border:1px solid var(--line); border-radius:10px; padding:32px; }
+  .tool-panel{ display:none; }
+  .tool-panel.active{ display:block; }
+  .tool-head{ display:flex; align-items:center; gap:12px; margin-bottom:26px; }
+  .tool-head .icon{ color:var(--orange); width:26px; height:26px; }
+  .tool-head h2{ font-size:26px; text-transform:uppercase; letter-spacing:0.02em; }
+
+  .field-row{ display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-bottom:18px; }
+  .field-col{ display:flex; flex-direction:column; gap:6px; }
+  label.small{ font-family:'Space Mono'; font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+
+  select, input[type="text"], input[type="number"], textarea{
+    background:var(--board); border:1px solid var(--line); color:var(--paper);
+    border-radius:5px; padding:10px 12px; font-family:'Inter'; font-size:14px;
+  }
+  select:focus, input:focus, textarea:focus{ outline:2px solid var(--orange); outline-offset:1px; border-color:transparent; }
+  input[type="range"]{ accent-color:var(--orange); width:100%; }
+  input[type="checkbox"]{ accent-color:var(--orange); width:16px; height:16px; }
+  textarea{ width:100%; resize:vertical; font-family:'Space Mono'; font-size:13px; line-height:1.6; }
+
+  .btn{ font-family:'Space Mono'; font-size:13px; padding:11px 20px; border-radius:5px; border:1px solid var(--line); background:transparent; color:var(--paper); cursor:pointer; }
+  .btn:hover{ border-color:var(--orange); color:var(--orange); }
+  .btn.primary{ background:var(--orange); border-color:var(--orange); color:#1F1409; font-weight:700; }
+  .btn.primary:hover{ opacity:0.9; color:#1F1409; }
+  .btn:focus-visible{ outline:2px solid var(--paper); outline-offset:2px; }
+  .btn-row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:6px; }
+
+  .chk{ display:flex; align-items:center; gap:8px; font-size:13.5px; cursor:pointer; }
+
+  /* Image tool */
+  .dropzone{ border:1.5px dashed var(--line); border-radius:8px; padding:30px; text-align:center; cursor:pointer; color:var(--dim); font-size:13.5px; transition:border-color .15s ease; }
+  .dropzone.drag{ border-color:var(--orange); color:var(--paper); }
+  .dropzone strong{ color:var(--paper); }
+  .result-row{ display:flex; align-items:center; gap:12px; background:var(--board); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-top:10px; }
+  .result-row .thumb{ width:42px; height:42px; object-fit:cover; border-radius:4px; flex-shrink:0; background:var(--board-2); }
+  .result-row .rmeta{ display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; }
+  .result-row .fname{ font-family:'Space Mono'; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .result-row .meta{ font-size:11.5px; color:var(--dim); }
+  .result-row .dl-btn{ font-family:'Space Mono'; font-size:12px; border:1px solid var(--line); padding:7px 13px; border-radius:5px; text-decoration:none; color:var(--paper); flex-shrink:0; }
+  .result-row .dl-btn:hover{ border-color:var(--orange); color:var(--orange); }
+
+  /* Password tool */
+  .pw-output-row{ display:flex; gap:10px; margin-top:18px; }
+  .pw-output-row input{ flex:1; font-family:'Space Mono'; font-size:16px; letter-spacing:0.02em; }
+  .strength-track{ height:6px; background:var(--board); border-radius:3px; overflow:hidden; border:1px solid var(--line); margin-top:12px; }
+  .strength-fill{ height:100%; width:0%; transition:width .2s ease; background:var(--orange); }
+  .strength-label{ font-family:'Space Mono'; font-size:11.5px; color:var(--dim); margin-top:6px; display:block; }
+  .inline-warn{ display:none; color:var(--err); font-size:12.5px; margin-top:10px; }
+
+  /* Unit tool */
+  .uc-grid{ display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; }
+  .uc-swap{ height:42px; width:42px; display:flex; align-items:center; justify-content:center; padding:0; }
+
+  /* Word counter */
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:12px; margin-top:18px; }
+  .stat-box{ background:var(--board); border:1px solid var(--line); border-radius:6px; padding:14px; text-align:center; }
+  .stat-box .num{ font-family:'Barlow Condensed'; font-size:28px; color:var(--orange); font-weight:600; }
+  .stat-box .lab{ font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:0.05em; margin-top:2px; }
+
+  /* Color tool */
+  .color-main{ display:flex; gap:22px; align-items:center; flex-wrap:wrap; margin-bottom:22px; }
+  .color-swatch-lg{ width:88px; height:88px; border-radius:10px; border:1px solid var(--line); flex-shrink:0; }
+  .color-vals{ display:flex; flex-direction:column; gap:5px; font-family:'Space Mono'; font-size:13px; }
+  .palette-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .palette-swatch{ width:44px; height:44px; border-radius:6px; border:1px solid var(--line); cursor:pointer; padding:0; }
+  .palette-swatch:hover{ transform:scale(1.06); }
+  .palette-swatch:focus-visible{ outline:2px solid var(--orange); outline-offset:2px; }
+
+  /* JSON tool */
+  .json-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .json-grid textarea{ min-height:220px; }
+  .json-status{ font-family:'Space Mono'; font-size:12px; margin-top:10px; min-height:16px; }
+  .json-status.ok{ color:var(--ok); }
+  .json-status.err{ color:var(--err); }
+
+  /* Ad slot */
+  .ad-slot{ border:1px dashed var(--line); border-radius:8px; padding:20px; text-align:center; color:var(--dim); font-family:'Space Mono'; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; margin:36px 0; }
+
+  /* Why section */
+  section.why{ padding:56px 0 64px; }
+  .why-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+  .why-card{ background:var(--board-2); border:1px solid var(--line); border-radius:8px; padding:24px; }
+  .why-card h3{ font-size:19px; text-transform:uppercase; margin-bottom:8px; letter-spacing:0.02em; }
+  .why-card p{ font-size:13.5px; color:var(--dim); }
+
+  footer{ padding:28px 0; border-top:1px solid var(--line); }
+  footer .wrap{ display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; font-family:'Space Mono'; font-size:11.5px; color:var(--dim); }
+
+  @media (max-width:760px){
+    .pegboard{ grid-template-columns:1fr 1fr; }
+    .why-grid{ grid-template-columns:1fr; }
+    .json-grid{ grid-template-columns:1fr; }
+    .color-main{ flex-direction:column; align-items:flex-start; }
+  }
+  @media (max-width:480px){
+    .pegboard{ grid-template-columns:1fr; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <div class="brand"><span class="peg"></span>Pano</div>
+    <span class="nav-tag">6 araç · tarayıcında çalışır</span>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Hiçbir dosya sunucuya gitmez</div>
+    <h1 class="title">Altı alet,<br>tek <span>pano.</span></h1>
+    <p class="sub">Görsel sıkıştır, şifre üret, birim çevir, kelime say, renk seç, JSON düzenle — hepsi bu sayfada, hepsi tarayıcında çalışır.</p>
+
+    <div class="board-label">Alet panosu — birini seç</div>
+    <div class="pegboard" id="pegboard">
+      <button class="peg-slot active" data-tool="compress">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1.5"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5.5-5.5a1 1 0 0 0-1.4 0L6 19"/></svg>
+        <h3>Görsel Sıkıştırıcı</h3>
+        <p>Boyutu küçült, formatı değiştir</p>
+      </button>
+      <button class="peg-slot" data-tool="password">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="14" r="4"/><path d="M10 11l10-10"/><path d="M17 4l3 3"/><path d="M14 7l2.5 2.5"/></svg>
+        <h3>Şifre Oluşturucu</h3>
+        <p>Güçlü ve rastgele şifreler</p>
+      </button>
+      <button class="peg-slot" data-tool="unit">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="6" rx="1"/><path d="M6 9v2M9 9v3M12 9v2M15 9v3M18 9v2"/></svg>
+        <h3>Birim Çevirici</h3>
+        <p>Uzunluk, ağırlık, sıcaklık</p>
+      </button>
+      <button class="peg-slot" data-tool="words">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <h3>Kelime Sayacı</h3>
+        <p>Karakter, kelime, okuma süresi</p>
+      </button>
+      <button class="peg-slot" data-tool="color">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/></svg>
+        <h3>Renk Araçları</h3>
+        <p>HEX, RGB, HSL, palet</p>
+      </button>
+      <button class="peg-slot" data-tool="json">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3c-2 0-3 1-3 3v3c0 1-1 2-2 2 1 0 2 1 2 2v3c0 2 1 3 3 3M16 3c2 0 3 1 3 3v3c0 1 1 2 2 2-1 0-2 1-2 2v3c0 2-1 3-3 3"/></svg>
+        <h3>JSON Düzenleyici</h3>
+        <p>Biçimlendir, doğrula, küçült</p>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+<section id="toolstage">
+  <div class="wrap">
+    <div class="stage-card">
+
+      <!-- GÖRSEL SIKIŞTIRICI -->
+      <div class="tool-panel active" data-tool="compress">
+        <div class="tool-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1.5"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5.5-5.5a1 1 0 0 0-1.4 0L6 19"/></svg>
+          <h2>Görsel Sıkıştırıcı</h2>
+        </div>
+
+        <div class="field-row">
+          <div class="field-col">
+            <label class="small" for="imgFormat">Çıktı formatı</label>
+            <select id="imgFormat">
+              <option value="image/jpeg">JPG</option>
+              <option value="image/webp">WebP</option>
+              <option value="image/png">PNG</option>
+            </select>
+          </div>
+          <div class="field-col" id="imgQualityRow" style="min-width:220px; flex:1;">
+            <label class="small" for="imgQuality">Kalite — <span id="imgQualityVal">80%</span></label>
+            <input type="range" id="imgQuality" min="10" max="100" value="80">
+          </div>
+        </div>
+
+        <div class="dropzone" id="imgDrop">
+          <strong>Görsel sürükle bırak</strong> ya da tıklayıp seç · JPG, PNG, WebP<br>
+          birden fazla dosya seçebilirsin
+          <input type="file" id="imgFile" accept="image/*" multiple style="display:none;">
+        </div>
+
+        <div id="imgResults"></div>
+      </div>
+
+      <!-- ŞİFRE OLUŞTURUCU -->
+      <div class="tool-panel" data-tool="password">
+        <div class="tool-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="14" r="4"/><path d="M10 11l10-10"/><path d="M17 4l3 3"/><path d="M14 7l2.5 2.5"/></svg>
+          <h2>Şifre Oluşturucu</h2>
+        </div>
+
+        <div class="field-col" style="margin-bottom:18px;">
+          <label class="small" for="pwLen">Uzunluk — <span id="pwLenVal">16</span> karakter</label>
+          <input type="range" id="pwLen" min="8" max="32" value="16">
+        </div>
+
+        <div class="field-row">
+          <label class="chk"><input type="checkbox" id="pwUpper" checked> Büyük harf (A-Z)</label>
+          <label class="chk"><input type="checkbox" id="pwLower" checked> Küçük harf (a-z)</label>
+          <label class="chk"><input type="checkbox" id="pwNum" checked> Rakam (0-9)</label>
+          <label class="chk"><input type="checkbox" id="pwSym"> Sembol (!@#$)</label>
+        </div>
+        <p class="inline-warn" id="pwWarn">En az bir karakter türü seçmelisin.</p>
+
+        <div class="pw-output-row">
+          <input type="text" id="pwOutput" readonly>
+          <button class="btn" id="pwCopy">Kopyala</button>
+          <button class="btn primary" id="pwGen">Yeniden üret</button>
+        </div>
+        <div class="strength-track"><div class="strength-fill" id="pwStrengthBar"></div></div>
+        <span class="strength-label" id="pwStrengthLabel"></span>
+      </div>
+
+      <!-- BİRİM ÇEVİRİCİ -->
+      <div class="tool-panel" data-tool="unit">
+        <div class="tool-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="6" rx="1"/><path d="M6 9v2M9 9v3M12 9v2M15 9v3M18 9v2"/></svg>
+          <h2>Birim Çevirici</h2>
+        </div>
+
+        <div class="field-col" style="margin-bottom:18px; max-width:220px;">
+          <label class="small" for="ucCat">Kategori</label>
+          <select id="ucCat">
+            <option value="length">Uzunluk</option>
+            <option value="weight">Ağırlık</option>
+            <option value="temp">Sıcaklık</option>
+          </select>
+        </div>
+
+        <div class="uc-grid">
+          <div class="field-col">
+            <label class="small" for="ucInput">Değer</label>
+            <input type="number" id="ucInput" value="1">
+          </div>
+          <div class="field-col">
+            <label class="small" for="ucFrom">Kaynak birim</label>
+            <select id="ucFrom"></select>
+          </div>
+          <button class="btn uc-swap" id="ucSwap" title="Birimleri değiştir" aria-label="Birimleri değiştir">⇄</button>
+          <div class="field-col">
+            <label class="small" for="ucTo">Hedef birim</label>
+            <select id="ucTo"></select>
+          </div>
+          <div class="field-col">
+            <label class="small" for="ucOutput">Sonuç</label>
+            <input type="text" id="ucOutput" readonly>
+          </div>
+        </div>
+      </div>
+
+      <!-- KELİME SAYACI -->
+      <div class="tool-panel" data-tool="words">
+        <div class="tool-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          <h2>Kelime Sayacı</h2>
+        </div>
+
+        <textarea id="wcInput" rows="8" placeholder="Metnini buraya yapıştır veya yazmaya başla…"></textarea>
+
+        <div class="stat-grid">
+          <div class="stat-box"><div class="num" id="wcWords">0</div><div class="lab">Kelime</div></div>
+          <div class="stat-box"><div class="num" id="wcChars">0</div><div class="lab">Karakter</div></div>
+          <div class="stat-box"><div class="num" id="wcCharsNoSpace">0</div><div class="lab">Boşluksuz</div></div>
+          <div class="stat-box"><div class="num" id="wcSentences">0</div><div class="lab">Cümle</div></div>
+          <div class="stat-box"><div class="num" id="wcParagraphs">0</div><div class="lab">Paragraf</div></div>
+          <div class="stat-box"><div class="num" id="wcReadTime">0 sn</div><div class="lab">Okuma süresi</div></div>
+        </div>
+      </div>
+
+      <!-- RENK ARAÇLARI -->
+      <div class="tool-panel" data-tool="color">
+        <div class="tool-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/></svg>
+          <h2>Renk Araçları</h2>
+        </div>
+
+        <div class="color-main">
+          <div class="color-swatch-lg" id="clSwatch"></div>
+          <div class="field-col">
+            <label class="small" for="clPicker">Renk seç</label>
+            <input type="color" id="clPicker" value="#ff6a2e">
+          </div>
+          <div class="field-col">
+            <label class="small" for="clHex">HEX</label>
+            <input type="text" id="clHex" value="#ff6a2e" style="width:120px;">
+          </div>
+          <div class="color-vals">
+            <span id="clRgb">rgb(255, 106, 46)</span>
+            <span id="clHsl">hsl(16, 100%, 59%)</span>
+          </div>
+        </div>
+
+        <label class="small" style="display:block; margin-bottom:8px;">Uyumlu palet — tıkla, o rengi ana renk yap</label>
+        <div class="palette-row" id="clPalette"></div>
+      </div>
+
+      <!-- JSON DÜZENLEYİCİ -->
+      <div class="tool-panel" data-tool="json">
+        <div class="tool-head">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3c-2 0-3 1-3 3v3c0 1-1 2-2 2 1 0 2 1 2 2v3c0 2 1 3 3 3M16 3c2 0 3 1 3 3v3c0 1 1 2 2 2-1 0-2 1-2 2v3c0 2-1 3-3 3"/></svg>
+          <h2>JSON Düzenleyici</h2>
+        </div>
+
+        <div class="btn-row" style="margin-bottom:14px;">
+          <button class="btn primary" id="jsonFormat">Biçimlendir</button>
+          <button class="btn" id="jsonMinify">Küçült</button>
+          <button class="btn" id="jsonValidate">Doğrula</button>
+          <button class="btn" id="jsonCopy">Çıktıyı kopyala</button>
+        </div>
+
+        <div class="json-grid">
+          <div class="field-col">
+            <label class="small" for="jsonInput">Giriş</label>
+            <textarea id="jsonInput" placeholder='{"ornek": "buraya JSON yapıştır"}'></textarea>
+          </div>
+          <div class="field-col">
+            <label class="small" for="jsonOutput">Çıktı</label>
+            <textarea id="jsonOutput" readonly></textarea>
+          </div>
+        </div>
+        <div class="json-status" id="jsonStatus"></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <!-- AdSense vb. kod buraya eklenebilir -->
+  <div class="ad-slot">Reklam alanı — Google AdSense kodunuzu buraya ekleyin</div>
+</div>
+
+<section class="why">
+  <div class="wrap">
+    <h2 style="font-size:28px; text-transform:uppercase; margin-bottom:24px;">Neden Pano?</h2>
+    <div class="why-grid">
+      <div class="why-card">
+        <h3>Sunucuya yüklenmez</h3>
+        <p>Görsellerin, metinlerin ve şifrelerin cihazından çıkmaz. İşlemler tarayıcında, senin bilgisayarında çalışır.</p>
+      </div>
+      <div class="why-card">
+        <h3>Kayıt gerekmez</h3>
+        <p>Hesap açmadan, e-posta vermeden, beklemeden direkt kullan.</p>
+      </div>
+      <div class="why-card">
+        <h3>Sınırsız kullan</h3>
+        <p>Günde istediğin kadar dosya işle, istediğin kadar şifre üret. Limit yok.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="wrap">
+  <div class="ad-slot">Reklam alanı — Google AdSense kodunuzu buraya ekleyin</div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p>Pano — günlük araç kutusu</p>
+    <p>Tüm araçlar tarayıcında çalışır · hiçbir veri sunucuya gönderilmez</p>
+  </div>
+</footer>
+
+<script>
+  // Pano panosu — araç seçici
+  (function(){
+    var slots = document.querySelectorAll('.peg-slot');
+    var panels = document.querySelectorAll('.tool-panel');
+    var stage = document.getElementById('toolstage');
+
+    function activate(tool){
+      slots.forEach(function(s){ s.classList.toggle('active', s.dataset.tool === tool); });
+      panels.forEach(function(p){ p.classList.toggle('active', p.dataset.tool === tool); });
+    }
+
+    slots.forEach(function(s){
+      s.addEventListener('click', function(){
+        activate(s.dataset.tool);
+        stage.scrollIntoView({behavior:'smooth', block:'start'});
+      });
+    });
+  })();
+</script>
+
+<script>
+  // Görsel sıkıştırıcı
+  (function(){
+    var fileInput = document.getElementById('imgFile');
+    var dropZone = document.getElementById('imgDrop');
+    var formatSel = document.getElementById('imgFormat');
+    var qualityRange = document.getElementById('imgQuality');
+    var qualityVal = document.getElementById('imgQualityVal');
+    var qualityRow = document.getElementById('imgQualityRow');
+    var resultsEl = document.getElementById('imgResults');
+
+    function updateQualityRowState(){
+      var disabled = formatSel.value === 'image/png';
+      qualityRange.disabled = disabled;
+      qualityRow.style.opacity = disabled ? '0.4' : '1';
+    }
+    formatSel.addEventListener('change', updateQualityRowState);
+    updateQualityRowState();
+
+    qualityRange.addEventListener('input', function(){
+      qualityVal.textContent = qualityRange.value + '%';
+    });
+
+    function loadDrawable(file){
+      if('createImageBitmap' in window){
+        return createImageBitmap(file, {imageOrientation:'from-image'}).catch(function(){
+          return loadAsImage(file);
+        });
+      }
+      return loadAsImage(file);
+    }
+    function loadAsImage(file){
+      return new Promise(function(resolve, reject){
+        var img = new Image();
+        img.onload = function(){ resolve(img); };
+        img.onerror = function(){ reject(new Error('Görsel okunamadı')); };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    function fmtSize(bytes){
+      if(bytes < 1024) return bytes + ' B';
+      if(bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+      return (bytes/1024/1024).toFixed(2) + ' MB';
+    }
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+      });
+    }
+
+    function processFile(file){
+      var row = document.createElement('div');
+      row.className = 'result-row';
+      row.innerHTML = '<span class="fname">' + escapeHtml(file.name) + '</span><span class="meta">işleniyor…</span>';
+      resultsEl.prepend(row);
+
+      loadDrawable(file).then(function(drawable){
+        var w = drawable.width, h = drawable.height;
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(drawable, 0, 0, w, h);
+
+        var fmt = formatSel.value;
+        var q = Number(qualityRange.value) / 100;
+
+        canvas.toBlob(function(blob){
+          if(!blob){
+            row.innerHTML = '<span class="fname">' + escapeHtml(file.name) + '</span><span class="meta" style="color:var(--err)">İşlenemedi</span>';
+            return;
+          }
+          var url = URL.createObjectURL(blob);
+          var ext = fmt === 'image/png' ? 'png' : (fmt === 'image/webp' ? 'webp' : 'jpg');
+          var newName = file.name.replace(/\.[^.]+$/, '') + '-pano.' + ext;
+          var before = file.size, after = blob.size;
+          var diff = before > 0 ? Math.round((1 - after/before) * 100) : 0;
+          var diffText = diff > 0 ? ('%' + diff + ' küçüldü') : (diff < 0 ? ('%' + Math.abs(diff) + ' büyüdü') : 'değişmedi');
+
+          row.innerHTML =
+            '<img class="thumb" src="' + url + '" alt="">' +
+            '<div class="rmeta"><span class="fname">' + escapeHtml(newName) + '</span>' +
+            '<span class="meta">' + fmtSize(before) + ' \u2192 ' + fmtSize(after) + ' \u00b7 ' + diffText + '</span></div>' +
+            '<a class="dl-btn" href="' + url + '" download="' + newName + '">İndir</a>';
+        }, fmt, fmt === 'image/png' ? undefined : q);
+
+      }).catch(function(){
+        row.innerHTML = '<span class="fname">' + escapeHtml(file.name) + '</span><span class="meta" style="color:var(--err)">Bu dosya işlenemedi</span>';
+      });
+    }
+
+    fileInput.addEventListener('change', function(){
+      Array.from(fileInput.files).forEach(processFile);
+      fileInput.value = '';
+    });
+
+    ['dragover','dragleave','drop'].forEach(function(evt){
+      dropZone.addEventListener(evt, function(e){
+        e.preventDefault();
+        if(evt === 'dragover') dropZone.classList.add('drag');
+        if(evt === 'dragleave') dropZone.classList.remove('drag');
+        if(evt === 'drop'){
+          dropZone.classList.remove('drag');
+          var files = Array.from(e.dataTransfer.files).filter(function(f){ return f.type.indexOf('image/') === 0; });
+          files.forEach(processFile);
+        }
+      });
+    });
+    dropZone.addEventListener('click', function(){ fileInput.click(); });
+  })();
+</script>
+
+<script>
+  // Şifre oluşturucu
+  (function(){
+    var lenRange = document.getElementById('pwLen');
+    var lenVal = document.getElementById('pwLenVal');
+    var upperChk = document.getElementById('pwUpper');
+    var lowerChk = document.getElementById('pwLower');
+    var numChk = document.getElementById('pwNum');
+    var symChk = document.getElementById('pwSym');
+    var output = document.getElementById('pwOutput');
+    var genBtn = document.getElementById('pwGen');
+    var copyBtn = document.getElementById('pwCopy');
+    var strengthBar = document.getElementById('pwStrengthBar');
+    var strengthLabel = document.getElementById('pwStrengthLabel');
+    var warn = document.getElementById('pwWarn');
+
+    var SETS = {
+      upper: 'ABCDEFGHJKLMNPQRSTUVWXYZ',
+      lower: 'abcdefghijkmnopqrstuvwxyz',
+      num: '23456789',
+      sym: '!@#$%^&*-_=+?'
+    };
+
+    lenRange.addEventListener('input', function(){ lenVal.textContent = lenRange.value; });
+
+    function randomIndex(max){
+      var arr = new Uint32Array(1);
+      var limit = Math.floor(0xFFFFFFFF / max) * max;
+      var val;
+      do{
+        crypto.getRandomValues(arr);
+        val = arr[0];
+      } while(val >= limit);
+      return val % max;
+    }
+
+    function generate(){
+      var pool = '';
+      if(upperChk.checked) pool += SETS.upper;
+      if(lowerChk.checked) pool += SETS.lower;
+      if(numChk.checked) pool += SETS.num;
+      if(symChk.checked) pool += SETS.sym;
+
+      if(pool.length === 0){
+        warn.style.display = 'block';
+        output.value = '';
+        updateStrength(0,0);
+        return;
+      }
+      warn.style.display = 'none';
+
+      var len = Number(lenRange.value);
+      var out = '';
+      for(var i=0;i<len;i++){
+        out += pool[randomIndex(pool.length)];
+      }
+      output.value = out;
+      updateStrength(len, pool.length);
+    }
+
+    function updateStrength(len, poolSize){
+      if(poolSize === 0){ strengthBar.style.width = '0%'; strengthLabel.textContent = ''; return; }
+      var bits = Math.log2(poolSize) * len;
+      var pct, label, color;
+      if(bits < 40){ pct=25; label='Zayıf'; color='var(--err)'; }
+      else if(bits < 65){ pct=55; label='Orta'; color='var(--orange)'; }
+      else if(bits < 90){ pct=80; label='Güçlü'; color='var(--tan)'; }
+      else { pct=100; label='Çok güçlü'; color='var(--ok)'; }
+      strengthBar.style.width = pct + '%';
+      strengthBar.style.background = color;
+      strengthLabel.textContent = label + ' \u00b7 ~' + Math.round(bits) + ' bit';
+    }
+
+    function copyOutput(){
+      if(!output.value) return;
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(output.value).then(flashCopied).catch(fallbackCopy);
+      } else {
+        fallbackCopy();
+      }
+    }
+    function fallbackCopy(){
+      try{
+        output.removeAttribute('readonly');
+        output.select();
+        document.execCommand('copy');
+        output.setAttribute('readonly','');
+        flashCopied();
+      }catch(e){
+        output.select();
+      }
+    }
+    function flashCopied(){
+      var original = copyBtn.textContent;
+      copyBtn.textContent = 'Kopyalandı';
+      setTimeout(function(){ copyBtn.textContent = original; }, 1200);
+    }
+
+    [lenRange,upperChk,lowerChk,numChk,symChk].forEach(function(el){
+      el.addEventListener('change', generate);
+    });
+    lenRange.addEventListener('input', generate);
+    genBtn.addEventListener('click', generate);
+    copyBtn.addEventListener('click', copyOutput);
+
+    generate();
+  })();
+</script>
+
+<script>
+  // Birim çevirici
+  (function(){
+    var CATS = {
+      length: { units:{ mm:0.001, cm:0.01, m:1, km:1000, inc:0.0254, ft:0.3048, mil:1609.344, yd:0.9144 },
+        labels:{mm:'Milimetre',cm:'Santimetre',m:'Metre',km:'Kilometre',inc:'İnç',ft:'Feet',mil:'Mil',yd:'Yarda'} },
+      weight: { units:{ mg:0.000001, g:0.001, kg:1, ton:1000, oz:0.0283495, lb:0.453592 },
+        labels:{mg:'Miligram',g:'Gram',kg:'Kilogram',ton:'Ton',oz:'Ons',lb:'Pound'} },
+      temp: { special:true, labels:{c:'Celsius',f:'Fahrenheit',k:'Kelvin'} }
+    };
+
+    var catSel = document.getElementById('ucCat');
+    var fromSel = document.getElementById('ucFrom');
+    var toSel = document.getElementById('ucTo');
+    var inputEl = document.getElementById('ucInput');
+    var outputEl = document.getElementById('ucOutput');
+    var swapBtn = document.getElementById('ucSwap');
+
+    function optionsHtml(labels){
+      return Object.keys(labels).map(function(k){ return '<option value="' + k + '">' + labels[k] + '</option>'; }).join('');
+    }
+
+    function populateUnits(){
+      var cat = CATS[catSel.value];
+      var keys = Object.keys(cat.labels);
+      fromSel.innerHTML = optionsHtml(cat.labels);
+      toSel.innerHTML = optionsHtml(cat.labels);
+      fromSel.value = keys[0];
+      toSel.value = keys[1] || keys[0];
+      convert();
+    }
+
+    function toCelsius(v, unit){
+      if(unit==='c') return v;
+      if(unit==='f') return (v-32) * 5/9;
+      return v - 273.15;
+    }
+    function fromCelsius(v, unit){
+      if(unit==='c') return v;
+      if(unit==='f') return v*9/5 + 32;
+      return v + 273.15;
+    }
+    function round(n){
+      if(Math.abs(n) >= 1000) return Math.round(n*100)/100;
+      return Math.round(n*100000)/100000;
+    }
+
+    function convert(){
+      var cat = CATS[catSel.value];
+      var val = parseFloat(inputEl.value);
+      if(isNaN(val)){ outputEl.value = ''; return; }
+
+      if(cat.special){
+        var c = toCelsius(val, fromSel.value);
+        outputEl.value = round(fromCelsius(c, toSel.value));
+        return;
+      }
+      var base = val * cat.units[fromSel.value];
+      var result = base / cat.units[toSel.value];
+      outputEl.value = round(result);
+    }
+
+    catSel.addEventListener('change', populateUnits);
+    fromSel.addEventListener('change', convert);
+    toSel.addEventListener('change', convert);
+    inputEl.addEventListener('input', convert);
+    swapBtn.addEventListener('click', function(){
+      var tmp = fromSel.value;
+      fromSel.value = toSel.value;
+      toSel.value = tmp;
+      convert();
+    });
+
+    populateUnits();
+  })();
+</script>
+
+<script>
+  // Kelime sayacı
+  (function(){
+    var ta = document.getElementById('wcInput');
+    var elChars = document.getElementById('wcChars');
+    var elCharsNoSpace = document.getElementById('wcCharsNoSpace');
+    var elWords = document.getElementById('wcWords');
+    var elSentences = document.getElementById('wcSentences');
+    var elParagraphs = document.getElementById('wcParagraphs');
+    var elReadTime = document.getElementById('wcReadTime');
+
+    function update(){
+      var text = ta.value;
+      var chars = text.length;
+      var charsNoSpace = text.replace(/\s/g,'').length;
+      var words = (text.trim().match(/\S+/g) || []).length;
+      var trimmed = text.trim();
+      var sentences = trimmed === '' ? 0 : (trimmed.match(/[^.!?]+[.!?]+/g) || [trimmed]).length;
+      var paragraphs = text.split(/\n+/).map(function(p){ return p.trim(); }).filter(Boolean).length;
+      var minutes = words / 200;
+      var readTime = words === 0 ? '0 sn' : (minutes < 1 ? Math.max(1, Math.round(minutes*60)) + ' sn' : Math.round(minutes) + ' dk');
+
+      elChars.textContent = chars;
+      elCharsNoSpace.textContent = charsNoSpace;
+      elWords.textContent = words;
+      elSentences.textContent = sentences;
+      elParagraphs.textContent = paragraphs;
+      elReadTime.textContent = readTime;
+    }
+
+    ta.addEventListener('input', update);
+    update();
+  })();
+</script>
+
+<script>
+  // Renk araçları
+  (function(){
+    var picker = document.getElementById('clPicker');
+    var hexInput = document.getElementById('clHex');
+    var rgbOut = document.getElementById('clRgb');
+    var hslOut = document.getElementById('clHsl');
+    var paletteEl = document.getElementById('clPalette');
+    var swatchMain = document.getElementById('clSwatch');
+
+    function hexToRgb(hex){
+      hex = hex.replace('#','');
+      if(hex.length === 3) hex = hex.split('').map(function(c){ return c+c; }).join('');
+      var num = parseInt(hex,16);
+      return { r:(num>>16)&255, g:(num>>8)&255, b:num&255 };
+    }
+    function rgbToHex(r,g,b){
+      return '#' + [r,g,b].map(function(v){ return v.toString(16).padStart(2,'0'); }).join('');
+    }
+    function rgbToHsl(r,g,b){
+      r/=255; g/=255; b/=255;
+      var max=Math.max(r,g,b), min=Math.min(r,g,b);
+      var h,s,l=(max+min)/2;
+      if(max===min){ h=s=0; }
+      else{
+        var d = max-min;
+        s = l>0.5 ? d/(2-max-min) : d/(max+min);
+        if(max===r) h=(g-b)/d + (g<b?6:0);
+        else if(max===g) h=(b-r)/d + 2;
+        else h=(r-g)/d + 4;
+        h/=6;
+      }
+      return { h:Math.round(h*360), s:Math.round(s*100), l:Math.round(l*100) };
+    }
+    function hslToRgb(h,s,l){
+      h/=360; s/=100; l/=100;
+      var r,g,b;
+      if(s===0){ r=g=b=l; }
+      else{
+        var hue2rgb = function(p,q,t){
+          if(t<0) t+=1;
+          if(t>1) t-=1;
+          if(t<1/6) return p+(q-p)*6*t;
+          if(t<1/2) return q;
+          if(t<2/3) return p+(q-p)*(2/3-t)*6;
+          return p;
+        };
+        var q = l<0.5 ? l*(1+s) : l+s-l*s;
+        var p = 2*l-q;
+        r = hue2rgb(p,q,h+1/3);
+        g = hue2rgb(p,q,h);
+        b = hue2rgb(p,q,h-1/3);
+      }
+      return { r:Math.round(r*255), g:Math.round(g*255), b:Math.round(b*255) };
+    }
+
+    function render(hex){
+      if(!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex)) return;
+      var rgb = hexToRgb(hex);
+      var hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+      var fullHex = rgbToHex(rgb.r, rgb.g, rgb.b);
+
+      swatchMain.style.background = fullHex;
+      rgbOut.textContent = 'rgb(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ')';
+      hslOut.textContent = 'hsl(' + hsl.h + ', ' + hsl.s + '%, ' + hsl.l + '%)';
+      hexInput.value = fullHex;
+      picker.value = fullHex;
+
+      var angles = [
+        {label:'Tamamlayıcı', d:180},
+        {label:'Analog +30°', d:30},
+        {label:'Analog -30°', d:-30},
+        {label:'Triadik +120°', d:120},
+        {label:'Triadik -120°', d:-120}
+      ];
+      paletteEl.innerHTML = '';
+      angles.forEach(function(a){
+        var h2 = ((hsl.h + a.d) % 360 + 360) % 360;
+        var rgb2 = hslToRgb(h2, hsl.s, hsl.l);
+        var hex2 = rgbToHex(rgb2.r, rgb2.g, rgb2.b);
+        var sw = document.createElement('button');
+        sw.className = 'palette-swatch';
+        sw.style.background = hex2;
+        sw.title = a.label + ' \u00b7 ' + hex2;
+        sw.setAttribute('aria-label', a.label + ' ' + hex2);
+        sw.addEventListener('click', function(){ render(hex2); });
+        paletteEl.appendChild(sw);
+      });
+    }
+
+    picker.addEventListener('input', function(){ render(picker.value); });
+    hexInput.addEventListener('input', function(){
+      var v = hexInput.value.trim();
+      if(v && v[0] !== '#') v = '#' + v;
+      if(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)) render(v);
+    });
+
+    render('#ff6a2e');
+  })();
+</script>
+
+<script>
+  // JSON düzenleyici
+  (function(){
+    var input = document.getElementById('jsonInput');
+    var output = document.getElementById('jsonOutput');
+    var status = document.getElementById('jsonStatus');
+    var fmtBtn = document.getElementById('jsonFormat');
+    var minBtn = document.getElementById('jsonMinify');
+    var valBtn = document.getElementById('jsonValidate');
+    var copyBtn = document.getElementById('jsonCopy');
+
+    function showError(err){
+      status.textContent = 'Geçersiz JSON: ' + err.message;
+      status.className = 'json-status err';
+      output.value = '';
+    }
+    function showOk(msg){
+      status.textContent = msg;
+      status.className = 'json-status ok';
+    }
+
+    fmtBtn.addEventListener('click', function(){
+      try{
+        var parsed = JSON.parse(input.value);
+        output.value = JSON.stringify(parsed, null, 2);
+        showOk('Geçerli JSON \u00b7 biçimlendirildi');
+      }catch(err){ showError(err); }
+    });
+    minBtn.addEventListener('click', function(){
+      try{
+        var parsed = JSON.parse(input.value);
+        output.value = JSON.stringify(parsed);
+        showOk('Geçerli JSON \u00b7 küçültüldü');
+      }catch(err){ showError(err); }
+    });
+    valBtn.addEventListener('click', function(){
+      try{
+        JSON.parse(input.value);
+        showOk('Geçerli JSON \u2713');
+      }catch(err){ showError(err); }
+    });
+    copyBtn.addEventListener('click', function(){
+      if(!output.value) return;
+      function done(){
+        var orig = copyBtn.textContent;
+        copyBtn.textContent = 'Kopyalandı';
+        setTimeout(function(){ copyBtn.textContent = orig; }, 1200);
+      }
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(output.value).then(done).catch(function(){
+          try{
+            output.removeAttribute('readonly');
+            output.select();
+            document.execCommand('copy');
+            output.setAttribute('readonly','');
+            done();
+          }catch(e){}
+        });
+      } else {
+        try{
+          output.removeAttribute('readonly');
+          output.select();
+          document.execCommand('copy');
+          output.setAttribute('readonly','');
+          done();
+        }catch(e){}
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>
