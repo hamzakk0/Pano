@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://hamzakk0.github.io/Pano/sitemap.xml
